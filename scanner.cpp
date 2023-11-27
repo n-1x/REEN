@@ -5,8 +5,9 @@
 
 #include "processHelpers.h"
 
-int main() {
-  auto const opProcessID = GetProcessIDByName("testapp.exe");
+int main(int argc, char **argv) {
+  char const * const searchName = argc > 1 ? argv[1] : "testapp.exe";
+  auto const opProcessID = GetProcessIDByName(searchName);
 
   if (!opProcessID.has_value()) {
     printf("Unable to find process\n");
@@ -14,7 +15,7 @@ int main() {
   }
 
   DWORD processID = opProcessID.value();
-  printf("Found process ID %lu\n", processID);
+  printf("Found %s[%lu]\n", searchName, processID);
 
   HANDLE const hProcess = GetProcessHandleByID(processID);
 
@@ -23,20 +24,28 @@ int main() {
   printf("Enter initial value: ");
   std::cin >> answer;
   uint32_t targetValue = std::stoul(answer);
-  scanResult result = FindInitialAddresses(hProcess, targetValue);
+  ScanResult result = FindInitialAddresses(hProcess, targetValue);
+  bool done = false;
+  while (!done) {
+    printf("Found %llu address%s\n", result.addressCount, result.addressCount == 1 ? "" : "es");
 
-  while (answer != "done") {
-    for (auto const &r : result) {
-      for (auto const &a : r.offsets) {
-        printf("%p\n", (std::byte *)r.baseAddress + a * sizeof(targetValue));
+    if (result.addressCount <= 32) {
+      for (auto const &r : result.pages) {
+        for (auto const &a : r.offsets) {
+          printf("%p\n", (std::byte *)r.baseAddress + a);
+        }
       }
     }
 
     printf("Enter new value: ");
     std::cin >> answer;
-    targetValue = std::stoul(answer);
-
-    RefineScan(hProcess, result, targetValue);
+    if (answer == "done") {
+      done = true;
+    }
+    else {
+      targetValue = std::stoul(answer);
+      RefineScan(hProcess, result, targetValue);
+    }
   }
 
   return 0;
